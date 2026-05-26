@@ -1,0 +1,36 @@
+# --- Python Environment ---
+venv/
+.venv/
+env/
+ENV/
+*.py[cod]
+*$py.class
+__pycache__/
+Shadow/__pycache__/
+
+# --- Local Databases & State ---
+mem0_db/
+shadow_memory.json
+
+# --- Configuration & Secrets ---
+.env
+Shadow/config/config.toml
+
+# --- Application Logs & Workspace ---
+logs/
+Shadow/logs/
+Shadow/workspace/
+*.log
+
+# --- Local Project / External Folders ---
+nanobrowser/
+chrome-extension/
+
+# --- IDE Settings ---
+.vscode/
+.idea/
+.history/
+
+# --- Operating System Files ---
+.DS_Store
+Thumbs.db

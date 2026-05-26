@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Shadow Browser Agent",
+  "version": "1.0",
+  "description": "Premium AI-driven browser controller connected to OpenManus.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "tabs",
+    "sidePanel",
+    "webNavigation",
+    "storage",
+    "clipboardRead",
+    "clipboardWrite"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "sidebar.html"
+  },
+  "action": {
+    "default_title": "Open Shadow Sidebar"
+  },
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["buildDomTree.js"],
+      "matches": ["*://*/*"]
+    }
+  ]
+}
