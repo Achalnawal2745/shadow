@@ -7,7 +7,7 @@ from app.agent.toolcall import ToolCallAgent
 from app.config import config
 from app.logger import logger
 from app.prompt.shadow import NEXT_STEP_PROMPT, SYSTEM_PROMPT
-from app.tool import Terminate, ToolCollection
+from app.tool import Terminate, ToolCollection, ManageMemory
 from app.tool.ask_human import AskHuman
 from app.tool.browser_use_tool import BrowserUseTool
 from app.tool.mcp import MCPClients, MCPClientTool
@@ -38,6 +38,7 @@ class Shadow(ToolCallAgent):
             BrowserUseTool(),
             StrReplaceEditor(),
             AskHuman(),
+            ManageMemory(),
             Terminate(),
         )
     )

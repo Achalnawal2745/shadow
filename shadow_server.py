@@ -13,7 +13,7 @@ sys.path.append(openmanus_dir)
 from app.logger import logger
 from app.config import config as app_config
 from app.agent.shadow import Shadow
-from app.tool import ToolCollection
+from app.tool import ToolCollection, ManageMemory
 from app.tool.base import BaseTool
 from app.tool.python_execute import PythonExecute
 from app.tool.str_replace_editor import StrReplaceEditor
@@ -21,6 +21,7 @@ from app.tool.terminate import Terminate
 from app.tool.extension_browser import ExtensionBrowserTool, request_manager
 from app.llm import LLM
 from app.schema import AgentState
+from app.memory_manager import memory_manager
 
 PORT = 3001
 
@@ -79,6 +80,7 @@ class ShadowAgent(Shadow):
             ExtensionBrowserTool(connection=self.websocket_conn),
             StrReplaceEditor(),
             ExtensionAskHuman(websocket_conn=self.websocket_conn),
+            ManageMemory(),
             Terminate()
         )
         
@@ -153,9 +155,11 @@ async def ws_handler(websocket, path=None):
                 if pending_human_inputs and not pending_human_inputs.done():
                     if prompt_text.lower() in ["stop", "cancel", "exit", "quit"] and active_agent:
                         active_agent.state = AgentState.FINISHED
+                    if active_agent:
+                        active_agent.current_step = 0  # Reset step counter for new turn
                     pending_human_inputs.set_result(prompt_text)
                     continue
-
+ 
                 if active_agent and active_agent.state == AgentState.RUNNING:
                     if prompt_text.lower() in ["stop", "cancel", "exit", "quit"]:
                         logger.info("User requested to stop the active agent.")
@@ -167,6 +171,7 @@ async def ws_handler(websocket, path=None):
                     else:
                         logger.info(f"Injecting user message into active agent memory: {prompt_text}")
                         active_agent.update_memory("user", prompt_text)
+                        active_agent.current_step = 0  # Reset step counter for new instruction
                         await websocket.send(json.dumps({
                             "type": "STATUS_UPDATE",
                             "data": {"message": "Injected comment into agent's active memory."}
@@ -223,6 +228,7 @@ async def ws_handler(websocket, path=None):
                     
                     # Force LLM client re-initialization by clearing cached LLM instances
                     LLM._instances.clear()
+                    memory_manager.reinit()
                     
                     logger.info(f"Using LLM settings: model={llm_config.model}, base_url={llm_config.base_url}, api_key={'***' if llm_config.api_key else 'none'}")
                 
