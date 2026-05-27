@@ -20,7 +20,7 @@ class ExtensionRequestManager:
 request_manager = ExtensionRequestManager()
 
 class ExtensionBrowserTool(BaseTool):
-    name: str = "browser_use"  # Named browser_use so it integrates seamlessly with Manus agent prompts
+    name: str = "browser_use"  # Named browser_use so it integrates seamlessly with Shadow agent prompts
     description: str = (
         "A tool to control the user's active browser window via a Chrome extension. "
         "IMPORTANT: Google Docs/Sheets/Slides render their editors on a canvas and do not show text in standard DOM scraping. "
@@ -233,7 +233,7 @@ class ExtensionBrowserTool(BaseTool):
             title = res.get("title", "")
             innerText = res.get("innerText", "")
 
-            # Formulate OpenManus-compatible browser state JSON
+            # Formulate Shadow-compatible browser state JSON
             state_info = {
                 "url": url,
                 "title": title,

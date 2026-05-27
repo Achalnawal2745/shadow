@@ -4,7 +4,7 @@
 
 
 ## Prerequisites
-- conda activate 'Your OpenManus python env'
+- conda activate 'Your Shadow python env'
 - pip install daytona==0.21.8 structlog==25.4.0
 
 
@@ -13,7 +13,7 @@
 
 1. daytona config :
    ```bash
-   cd OpenManus
+   cd Shadow
    cp config/config.example-daytona.toml config/config.toml
    ```
 2. get daytona apikey :
@@ -33,7 +33,7 @@
 2. Run :
 
    ```bash
-   cd OpenManus
+   cd Shadow
    python sandbox_main.py
    ```
 

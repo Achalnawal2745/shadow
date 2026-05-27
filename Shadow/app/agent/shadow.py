@@ -183,5 +183,4 @@ class Shadow(ToolCallAgent):
         return result
 
 
-Manus = Shadow
 

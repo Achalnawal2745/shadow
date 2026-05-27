@@ -6,10 +6,10 @@ import sys
 import websockets
 from typing import Any, Dict, List, Optional
 
-# Add OpenManus directory to python path to resolve its internal absolute imports
+# Add Shadow directory to python path to resolve its internal absolute imports
 workspace_dir = os.path.dirname(os.path.abspath(__file__))
-openmanus_dir = os.path.join(workspace_dir, "Shadow")
-sys.path.append(openmanus_dir)
+shadow_dir = os.path.join(workspace_dir, "Shadow")
+sys.path.append(shadow_dir)
 
 from app.logger import logger
 from app.config import config as app_config
