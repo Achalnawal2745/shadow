@@ -1,4 +1,6 @@
-# --- Python Environment ---
+# ========================
+# Python Environment
+# ========================
 venv/
 .venv/
 env/
@@ -6,31 +8,67 @@ ENV/
 *.py[cod]
 *$py.class
 __pycache__/
-Shadow/__pycache__/
+**/__pycache__/
+*.egg-info/
+dist/
+build/
 
-# --- Local Databases & State ---
+# ========================
+# Secrets & Credentials
+# ========================
+.env
+.env.*
+Shadow/config/config.toml
+Shadow/config/mcp.json
+credentials.json
+client_secret*.json
+token.json
+
+# ========================
+# Local Databases & State
+# ========================
 mem0_db/
 shadow_memory.json
 
-# --- Configuration & Secrets ---
-.env
-Shadow/config/config.toml
-
-# --- Application Logs & Workspace ---
+# ========================
+# Logs
+# ========================
 logs/
 Shadow/logs/
-Shadow/workspace/
 *.log
 
-# --- Local Project / External Folders ---
+# ========================
+# Application Workspace
+# ========================
+Shadow/workspace/
+downloads/
+
+# ========================
+# External / Legacy Folders
+# ========================
 nanobrowser/
 chrome-extension/
 
-# --- IDE Settings ---
+# ========================
+# IDE & Editor Settings
+# ========================
 .vscode/
 .idea/
 .history/
+*.swp
+*.swo
+*~
 
-# --- Operating System Files ---
+# ========================
+# Operating System Files
+# ========================
 .DS_Store
 Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# ========================
+# Node.js (MCP servers)
+# ========================
+node_modules/
+package-lock.json

@@ -1,4 +1,5 @@
 import os
+os.environ["MEM0_TELEMETRY"] = "False"
 import json
 from typing import List, Dict, Any, Optional
 
@@ -28,6 +29,15 @@ class SemanticMemoryManager:
     def __init__(self):
         self.workspace_dir = config.workspace_root
         
+        # Release any existing Qdrant client lock to prevent concurrent access errors on re-init
+        if hasattr(self, "memory") and self.memory:
+            try:
+                if hasattr(self.memory, "vector_store") and self.memory.vector_store:
+                    if hasattr(self.memory.vector_store, "client") and self.memory.vector_store.client:
+                        self.memory.vector_store.client.close()
+            except Exception as e:
+                logger.warning(f"Error closing old Qdrant client: {e}")
+
         # Configure mem0 to use local HuggingFace embeddings
         # and store its vector database locally
         try:
@@ -209,16 +219,19 @@ class SemanticMemoryManager:
             prompt = (
                 f"User Request: {request}\n\n"
                 f"Task Execution Context:\n{json.dumps(context_messages)}\n\n"
-                "Based on the execution history and the user's guidance/comments, extract any clear user preferences "
-                "(e.g., preferred tools/frameworks, style choices) or key technical lessons learned "
-                "(e.g., how to solve a specific error, successful selectors, commands that worked). "
-                "Write a concise 1-2 sentence lesson or preference. Ignore general chat, greetings, or transient details. "
-                "Format as a simple, actionable insight."
+                "Based on the execution history and the conversation, extract:\n"
+                "1. Any key personal facts about the user (e.g. name, job, interests).\n"
+                "2. Clear user preferences (e.g. preferred coding tools, workflow settings).\n"
+                "3. Technical lessons learned (e.g. successful commands, how to solve specific errors).\n\n"
+                "Write a concise list of 1-2 sentence facts to remember. "
+                "Ignore general greetings or chat filler. If there is nothing new or important to remember, respond with 'None'."
             )
             
-            summary = await llm.ask(prompt)
-            if summary:
+            summary = await llm.ask([{"role": "user", "content": prompt}])
+            if summary and "none" not in summary.lower() and "no clear preferences" not in summary.lower():
                 self.save(summary)
+            else:
+                logger.info("No new memories to save from this turn.")
         except Exception as e:
             logger.error(f"Error summarizing and saving memory: {e}")
 

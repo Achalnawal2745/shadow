@@ -9,7 +9,7 @@ class PythonExecute(BaseTool):
     """A tool for executing Python code with timeout and safety restrictions."""
 
     name: str = "python_execute"
-    description: str = "Executes Python code string. Note: Only print outputs are visible, function return values are not captured. Use print statements to see results."
+    description: str = "Executes Python code string. Note: Only print outputs are visible, function return values are not captured. Use print statements to see results. If an import fails with ModuleNotFoundError, you can install the missing package yourself using: import subprocess; subprocess.run(['pip', 'install', 'package_name'])."
     parameters: dict = {
         "type": "object",
         "properties": {
@@ -24,7 +24,7 @@ class PythonExecute(BaseTool):
     async def execute(
         self,
         code: str,
-        timeout: int = 10,
+        timeout: int = 60,
     ) -> Dict:
         """
         Executes the provided Python code with a timeout using a clean subprocess.

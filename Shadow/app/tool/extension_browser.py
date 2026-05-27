@@ -21,7 +21,13 @@ request_manager = ExtensionRequestManager()
 
 class ExtensionBrowserTool(BaseTool):
     name: str = "browser_use"  # Named browser_use so it integrates seamlessly with Manus agent prompts
-    description: str = "A tool to control the user's active browser window via a Chrome extension."
+    description: str = (
+        "A tool to control the user's active browser window via a Chrome extension. "
+        "IMPORTANT: Google Docs/Sheets/Slides render their editors on a canvas and do not show text in standard DOM scraping. "
+        "If you are on a Google Doc page, use 'eval_js' action with text: "
+        "\"fetch(window.location.href.replace(/\\/edit.*/, '/export?format=txt')).then(r => r.text())\" "
+        "to read its full content as text. For Google Sheets, replace with '/export?format=csv' to get it as CSV."
+    )
     parameters: dict = {
         "type": "object",
         "properties": {
@@ -34,7 +40,9 @@ class ExtensionBrowserTool(BaseTool):
                     "scroll_down",
                     "scroll_up",
                     "wait",
-                    "eval_js"
+                    "eval_js",
+                    "start_meeting_recording",
+                    "get_meeting_transcript"
                 ],
                 "description": "The browser action to perform",
             },
@@ -78,6 +86,47 @@ class ExtensionBrowserTool(BaseTool):
             return ToolResult(error="WebSocket connection to extension is not active.")
 
         logger.info(f"ExtensionBrowserTool executing action: {action}")
+
+        # Handle meeting recording actions
+        if action == "start_meeting_recording":
+            start_script = (
+                "(function() {\n"
+                "    if (!window.__meetingObserver) {\n"
+                "        window.__meetingTranscript = [];\n"
+                "        window.__lastRecordedLine = \"\";\n"
+                "        window.__meetingObserver = new MutationObserver((mutations) => {\n"
+                "            let captionBlocks = document.querySelectorAll('div[jsname=\"lhx3jd\"]');\n"
+                "            if (captionBlocks.length === 0) {\n"
+                "                captionBlocks = document.querySelectorAll('.aG5w3e, .captions-container, div[class*=\"caption-text\"]');\n"
+                "            }\n"
+                "            captionBlocks.forEach(block => {\n"
+                "                let text = block.innerText.trim();\n"
+                "                if (text && text !== window.__lastRecordedLine) {\n"
+                "                    window.__meetingTranscript.push(text);\n"
+                "                    window.__lastRecordedLine = text;\n"
+                "                }\n"
+                "            });\n"
+                "        });\n"
+                "        window.__meetingObserver.observe(document.body, { childList: true, subtree: true, characterData: true });\n"
+                "        return 'Meeting recording observer started successfully.';\n"
+                "    }\n"
+                "    return 'Meeting recording observer is already active.';\n"
+                "})()"
+            )
+            return await self.execute(action="eval_js", text=start_script)
+
+        elif action == "get_meeting_transcript":
+            get_script = (
+                "(function() {\n"
+                "    let transcript = window.__meetingTranscript ? window.__meetingTranscript.join('\\n') : 'No recording active or no captions captured.';\n"
+                "    if (window.__meetingObserver) {\n"
+                "        window.__meetingObserver.disconnect();\n"
+                "        window.__meetingObserver = null;\n"
+                "    }\n"
+                "    return transcript;\n"
+                "})()"
+            )
+            return await self.execute(action="eval_js", text=get_script)
 
         # Handle local wait directly
         if action == "wait":

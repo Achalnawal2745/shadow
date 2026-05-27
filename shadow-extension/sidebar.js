@@ -6,6 +6,7 @@ const statusText = document.getElementById('status-text');
 
 // Navigation toggles
 const toggleSettingsBtn = document.getElementById('toggle-settings-btn');
+const terminateBtn = document.getElementById('terminate-btn');
 const backChatBtn = document.getElementById('back-chat-btn');
 const saveSettingsBtn = document.getElementById('save-settings-btn');
 const chatPanel = document.getElementById('chat-panel');
@@ -66,6 +67,18 @@ saveSettingsBtn.addEventListener('click', () => {
         settingsPanel.classList.remove('active');
         chatPanel.classList.add('active');
     }, 800);
+});
+
+// Emergency Stop button action
+terminateBtn.addEventListener('click', () => {
+    console.log("Emergency Stop clicked.");
+    chrome.runtime.sendMessage({
+        type: 'STOP'
+    });
+    // Immediately indicate we are stopping
+    appendMessage("🛑 Requesting emergency stop...", 'status');
+    terminateBtn.classList.add('hidden');
+    terminateBtn.classList.remove('active');
 });
 
 // Load config at startup
@@ -152,6 +165,17 @@ chrome.runtime.onMessage.addListener((message) => {
         } else {
             statusPill.className = 'status-pill disconnected';
             statusText.innerText = 'OFFLINE';
+            terminateBtn.classList.add('hidden');
+            terminateBtn.classList.remove('active');
+        }
+    } else if (message.type === 'AGENT_STATE') {
+        const state = message.state;
+        if (state === 'running') {
+            terminateBtn.classList.remove('hidden');
+            terminateBtn.classList.add('active');
+        } else {
+            terminateBtn.classList.add('hidden');
+            terminateBtn.classList.remove('active');
         }
     } else if (message.type === 'STREAM') {
         const text = message.data.text;

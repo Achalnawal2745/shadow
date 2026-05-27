@@ -174,7 +174,17 @@ class ToolCallAgent(ReActAgent):
 
         try:
             # Parse arguments
-            args = json.loads(command.function.arguments or "{}")
+            try:
+                args = json.loads(command.function.arguments or "{}")
+            except json.JSONDecodeError:
+                tool_instance = self.available_tools.tool_map[name]
+                properties = tool_instance.parameters.get("properties", {}) if hasattr(tool_instance, "parameters") else {}
+                if len(properties) == 1:
+                    param_name = list(properties.keys())[0]
+                    args = {param_name: command.function.arguments or ""}
+                    logger.warning(f"Auto-recovered invalid JSON arguments for tool '{name}' as {{{param_name}: ...}}")
+                else:
+                    raise
 
             # Execute the tool
             logger.info(f"🔧 Activating tool: '{name}'...")

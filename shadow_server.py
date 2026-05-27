@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+os.environ["MEM0_TELEMETRY"] = "False"
 import sys
 import websockets
 from typing import Any, Dict, List, Optional
@@ -29,6 +30,7 @@ PORT = 3001
 active_websocket = None
 pending_human_inputs = None
 active_agent = None
+active_agent_task = None
 
 class ExtensionAskHuman(BaseTool):
     """Subclass tool to ask the human for feedback directly inside the sidebar extension chat."""
@@ -113,6 +115,16 @@ class ShadowAgent(Shadow):
         """Override step to pause execution if agent only sends a text reply to the user."""
         result = await super().step()
         if not self.tool_calls and self.state != AgentState.FINISHED:
+            # Extract and save memory immediately after the agent's text reply, 
+            # so it learns from conversational steps without waiting for the entire session to close.
+            if self.memory and self.memory.messages:
+                try:
+                    orig_req = self.memory.messages[0].content or "User Query"
+                    # Run memory summarization in the background to avoid blocking the agent suspend/input loop
+                    asyncio.create_task(memory_manager.summarize_and_save(orig_req, list(self.memory.messages)))
+                except Exception as e:
+                    logger.error(f"Error saving intermediate memory: {e}")
+
             global pending_human_inputs
             if self.websocket_conn:
                 logger.info("Agent sent a text reply. Suspending step execution until next user message...")
@@ -123,7 +135,7 @@ class ShadowAgent(Shadow):
         return result
 
 async def ws_handler(websocket, path=None):
-    global active_websocket, pending_human_inputs, active_agent
+    global active_websocket, pending_human_inputs, active_agent, active_agent_task
     active_websocket = websocket
     logger.info("Chrome Extension connected to Shadow Server!")
     
@@ -137,6 +149,21 @@ async def ws_handler(websocket, path=None):
             
             if msg_type == "LOG":
                 print(f"[CLIENT_LOG] {data.get('data')}")
+                
+            elif msg_type == "STOP":
+                if active_agent:
+                    logger.info("Emergency Stop clicked: Halting active agent execution.")
+                    active_agent.state = AgentState.FINISHED
+                    if active_agent_task and not active_agent_task.done():
+                        logger.info("Cancelling active agent task.")
+                        active_agent_task.cancel()
+                    if pending_human_inputs and not pending_human_inputs.done():
+                        pending_human_inputs.set_result("stop")
+                    await websocket.send(json.dumps({
+                        "type": "STATUS_UPDATE",
+                        "data": {"message": "Agent execution halted by user (Emergency Stop)."}
+                    }))
+                continue
                 
             elif msg_type == "RESPONSE" or msg_type == "BROWSER_RESPONSE":
                 # Handle async browser tool response mapping
@@ -208,11 +235,21 @@ async def ws_handler(websocket, path=None):
                     
                     # Find a valid API key
                     api_key = user_config.get("apiKey")
+                    if api_key == "sk_a9P7GeAMa8eUSttosESAIkvaOXGulMuv":
+                        api_key = None
                     if not api_key:
                         if "pollinations" in base_url:
                             api_key = os.environ.get("POLLINATIONS_API_KEY") or env_vars.get("POLLINATIONS_API_KEY")
+                            if api_key == "sk_a9P7GeAMa8eUSttosESAIkvaOXGulMuv":
+                                api_key = None
                         if not api_key:
                             api_key = os.environ.get("OPENAI_API_KEY") or env_vars.get("OPENAI_API_KEY")
+                    
+                    # If using gen.pollinations.ai without a valid key, redirect to the free keyless endpoint
+                    if "gen.pollinations.ai" in base_url and not api_key:
+                        logger.info("Redirecting unauthenticated gen.pollinations.ai request to free keyless text.pollinations.ai/openai endpoint.")
+                        base_url = "https://text.pollinations.ai/openai"
+                        model = "openai"
                     
                     # Apply changes to config
                     llm_config.base_url = base_url
@@ -236,9 +273,13 @@ async def ws_handler(websocket, path=None):
                 agent = await ShadowAgent.create(websocket_conn=websocket)
                 
                 async def run_agent():
-                    global active_agent
+                    global active_agent, active_agent_task
                     active_agent = agent
                     try:
+                        await websocket.send(json.dumps({
+                            "type": "AGENT_STATE",
+                            "state": "running"
+                        }))
                         await agent.run(prompt_text)
                         try:
                             await websocket.send(json.dumps({
@@ -259,8 +300,16 @@ async def ws_handler(websocket, path=None):
                     finally:
                         if active_agent == agent:
                             active_agent = None
+                            active_agent_task = None
+                        try:
+                            await websocket.send(json.dumps({
+                                "type": "AGENT_STATE",
+                                "state": "idle"
+                            }))
+                        except Exception:
+                            pass
                         
-                asyncio.create_task(run_agent())
+                active_agent_task = asyncio.create_task(run_agent())
                 
     except websockets.ConnectionClosed:
         logger.info("Extension connection closed.")

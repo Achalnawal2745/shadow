@@ -358,7 +358,7 @@ function connectWS() {
                     id: message.id,
                     data: result
                 });
-            } else if (message.type === 'REPLY' || message.type === 'STREAM' || message.type === 'STATUS_UPDATE') {
+            } else if (message.type === 'REPLY' || message.type === 'STREAM' || message.type === 'STATUS_UPDATE' || message.type === 'AGENT_STATE') {
                 // Relay agent replies, streams, and status updates to sidebar chat
                 broadcastToSidebar(message);
             }
@@ -397,9 +397,9 @@ function broadcastToSidebar(msg) {
     });
 }
 
-// Receive prompts from sidebar and send to server
+// Receive prompts and stop requests from sidebar and send to server
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'PROMPT') {
+    if (message.type === 'PROMPT' || message.type === 'STOP') {
         sendWS(message);
     } else if (message.type === 'GET_STATUS') {
         sendResponse({ status: isConnected ? 'connected' : 'disconnected' });

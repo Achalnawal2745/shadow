@@ -1,3 +1,4 @@
+import asyncio
 import math
 from typing import Dict, List, Optional, Union
 
@@ -180,11 +181,16 @@ class HeaderOverrideClient(httpx.AsyncClient):
         keys_to_remove = [k for k in request.headers.keys() if k.lower().startswith("x-stainless-")]
         for k in keys_to_remove:
             del request.headers[k]
+        # Strip Authorization header if it is "none" or empty to allow keyless requests
+        auth = request.headers.get("Authorization", "")
+        if auth == "Bearer none" or "none" in auth.lower() or not auth.strip() or auth.strip() == "Bearer":
+            request.headers.pop("Authorization", None)
         return await super().send(request, *args, **kwargs)
 
 
 class LLM:
     _instances: Dict[str, "LLM"] = {}
+    _lock = asyncio.Lock()
 
     def __new__(
         cls, config_name: str = "default", llm_config: Optional[LLMSettings] = None
@@ -237,7 +243,8 @@ class LLM:
                 self.client = AsyncOpenAI(
                     api_key=self.api_key,
                     base_url=self.base_url,
-                    http_client=HeaderOverrideClient()
+                    http_client=HeaderOverrideClient(),
+                    timeout=45.0
                 )
 
             self.token_counter = TokenCounter(self.tokenizer)
@@ -369,7 +376,7 @@ class LLM:
 
     @retry(
         wait=wait_random_exponential(min=1, max=60),
-        stop=stop_after_attempt(6),
+        stop=stop_after_attempt(3),
         retry=retry_if_exception_type(
             (OpenAIError, Exception, ValueError)
         ),  # Don't retry TokenLimitExceeded
@@ -399,6 +406,7 @@ class LLM:
             OpenAIError: If API call fails after retries
             Exception: For unexpected errors
         """
+        await LLM._lock.acquire()
         try:
             # Check if the model supports images
             supports_images = self.model in MULTIMODAL_MODELS
@@ -482,17 +490,20 @@ class LLM:
             logger.exception(f"Validation error")
             raise
         except OpenAIError as oe:
-            logger.exception(f"OpenAI API error")
-            if isinstance(oe, AuthenticationError):
+            if isinstance(oe, RateLimitError):
+                logger.warning(f"Rate limit exceeded (429): {oe.message if hasattr(oe, 'message') else str(oe)}. Retrying...")
+            elif isinstance(oe, AuthenticationError):
                 logger.error("Authentication failed. Check API key.")
-            elif isinstance(oe, RateLimitError):
-                logger.error("Rate limit exceeded. Consider increasing retry attempts.")
             elif isinstance(oe, APIError):
-                logger.error(f"API error: {oe}")
+                logger.error(f"OpenAI API error: {oe}")
+            else:
+                logger.exception("OpenAI API error")
             raise
         except Exception:
             logger.exception(f"Unexpected error in ask")
             raise
+        finally:
+            LLM._lock.release()
 
     @retry(
         wait=wait_random_exponential(min=1, max=60),
@@ -528,6 +539,7 @@ class LLM:
             OpenAIError: If API call fails after retries
             Exception: For unexpected errors
         """
+        await LLM._lock.acquire()
         try:
             # For ask_with_images, we always set supports_images to True because
             # this method should only be called with models that support images
@@ -638,21 +650,24 @@ class LLM:
             logger.error(f"Validation error in ask_with_images: {ve}")
             raise
         except OpenAIError as oe:
-            logger.error(f"OpenAI API error: {oe}")
-            if isinstance(oe, AuthenticationError):
+            if isinstance(oe, RateLimitError):
+                logger.warning(f"Rate limit exceeded (429): {oe.message if hasattr(oe, 'message') else str(oe)}. Retrying...")
+            elif isinstance(oe, AuthenticationError):
                 logger.error("Authentication failed. Check API key.")
-            elif isinstance(oe, RateLimitError):
-                logger.error("Rate limit exceeded. Consider increasing retry attempts.")
             elif isinstance(oe, APIError):
-                logger.error(f"API error: {oe}")
+                logger.error(f"OpenAI API error: {oe}")
+            else:
+                logger.exception("OpenAI API error")
             raise
         except Exception as e:
             logger.error(f"Unexpected error in ask_with_images: {e}")
             raise
+        finally:
+            LLM._lock.release()
 
     @retry(
         wait=wait_random_exponential(min=1, max=60),
-        stop=stop_after_attempt(6),
+        stop=stop_after_attempt(3),
         retry=retry_if_exception_type(
             (OpenAIError, Exception, ValueError)
         ),  # Don't retry TokenLimitExceeded
@@ -661,7 +676,7 @@ class LLM:
         self,
         messages: List[Union[dict, Message]],
         system_msgs: Optional[List[Union[dict, Message]]] = None,
-        timeout: int = 300,
+        timeout: int = 45,
         tools: Optional[List[dict]] = None,
         tool_choice: TOOL_CHOICE_TYPE = ToolChoice.AUTO,  # type: ignore
         temperature: Optional[float] = None,
@@ -688,6 +703,7 @@ class LLM:
             OpenAIError: If API call fails after retries
             Exception: For unexpected errors
         """
+        await LLM._lock.acquire()
         try:
             # Validate tool_choice
             if tool_choice not in TOOL_CHOICE_VALUES:
@@ -769,14 +785,17 @@ class LLM:
             logger.error(f"Validation error in ask_tool: {ve}")
             raise
         except OpenAIError as oe:
-            logger.error(f"OpenAI API error: {oe}")
-            if isinstance(oe, AuthenticationError):
+            if isinstance(oe, RateLimitError):
+                logger.warning(f"Rate limit exceeded (429): {oe.message if hasattr(oe, 'message') else str(oe)}. Retrying...")
+            elif isinstance(oe, AuthenticationError):
                 logger.error("Authentication failed. Check API key.")
-            elif isinstance(oe, RateLimitError):
-                logger.error("Rate limit exceeded. Consider increasing retry attempts.")
             elif isinstance(oe, APIError):
-                logger.error(f"API error: {oe}")
+                logger.error(f"OpenAI API error: {oe}")
+            else:
+                logger.exception("OpenAI API error")
             raise
         except Exception as e:
             logger.error(f"Unexpected error in ask_tool: {e}")
             raise
+        finally:
+            LLM._lock.release()
